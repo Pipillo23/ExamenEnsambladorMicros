@@ -1,0 +1,32 @@
+# Solucion I Ejercicio: Cifrado Feistel en RISC-V
+        # x12 contiene la palabra original (R2)
+        # x10 contiene la direccion de la tabla (0x00FF0000)
+
+        li      t6, 4           # Contador de rondas (4 rondas)
+
+feistel_loop:
+        # Separar parte alta (L0) y parte baja (R0) de 16 bits
+        srli    t0, x12, 16     # t0 = L_prev (16 bits altos)
+        slli    t1, x12, 16
+        srli    t1, t1, 16      # t1 = R_prev (16 bits bajos)
+
+        # Funcion F simplificada para aplicacion de permutacion de bits segun tabla
+        # Se toma R_prev (t1) y se procesa con la tabla en memoria [x10]
+        lw      t2, 0(x10)      # Cargar parte de la tabla de permutacion
+        xor     t3, t1, t2      # F(R_prev, Tabla) aproximado por XOR con la tabla
+
+        # Ln = R_{n-1}
+        mv      t0, t1          # Nuevo L = R_prev antiguo
+
+        # Rn = L_{n-1} XOR F(R_{n-1}, Tabla)
+        srli    t4, x12, 16     # Recuperar L_prev original
+        xor     t1, t4, t3      # Nuevo R = L_prev XOR F(...)
+
+        # Recombinar L y R en x12: (L << 16) | R
+        slli    t0, t0, 16
+        li      t5, 0xFFFF
+        and     t1, t1, t5
+        or      x12, t0, t1
+
+        addi    t6, t6, -1
+        bnez    t6, feistel_loop
