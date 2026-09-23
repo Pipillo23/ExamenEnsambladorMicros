@@ -1,23 +1,23 @@
 # ######################################
-            # ESPACIO PARA SOLUCION
+            #           ESPACIO PARA SOLUCION
             # ######################################
             # MAIN CODE
             # -----------------
-            # Se llama la función de compare (R2 = 0x7, R3 = 0x9)
-            li      x12, 0x7
-            li      x13, 0x9
-            jal     ra, FUNC_COMP
+            # Se llama la función de compare con R2 = 0x7 y R3 = 0x9
+            li      x12, 0x7            # R2 (x12) = 0x7
+            li      x13, 0x9            # R3 (x13) = 0x9
+            jal     ra, FUNC_COMP       # Salta a la función compare (guarda retorno en ra)
 
-            # Se llama la función de compare (R2 = 0xB, R3 = R4)
-            li      x12, 0xB
-            mv      x13, x14            # R3 toma el valor del resultado anterior (R4)
-            jal     ra, FUNC_COMP
+            # Se llama la función de compare con R2 = 0xB y R3 = R4 (resultado anterior)
+            li      x12, 0xB            # R2 (x12) = 0xB
+            mv      x13, x14            # R3 (x13) toma el valor que quedó en R4 (x14)
+            jal     ra, FUNC_COMP       # Salta a compare nuevamente
 
-            # Se llama la función de sumatoria (R6 = 0x5)
-            li      x16, 0x5
-            jal     ra, FUNC_SUMATORIA
+            # Se llama la función de sumatoria con R6 = 0x5
+            li      x16, 0x5            # R6 (x16) = 0x5
+            jal     ra, FUNC_SUMATORIA  # Salta a sumatoria
 
-            # Fin del programa (bucle infinito para detener la ejecución en Ripes)
+            # Fin del programa (bucle infinito para detener Ripes)
 fin_prog:
             j       fin_prog
 
@@ -25,47 +25,44 @@ fin_prog:
             # ####################################
             #               FUNCIONES
             # ####################################
+
             # SUMATORIA
-            # ------------------------------------------------
             # IN: x16 (R6) Operando a calcular
             # OUT: x17 (R7) Resultado de la Sumatoria
             # PARAM: x15 (R5) Contador interno
 FUNC_SUMATORIA:
-            li      x15, 0x0            # R5 = 0
-            li      x17, 0x0            # R7 = 0
+            li      x15, 0x0            # Inicializa el contador R5 en 0
+            li      x17, 0x0            # Inicializa el resultado R7 en 0
 
 FUNC_SUMATORIA_FOR:
-            # Sumatoria del resultado actual con el contador actual
-            add     x17, x17, x15       # R7 = R7 + R5
+            # Sumatoria del resultado actual con el contador actual (R7 = R7 + R5)
+            add     x17, x17, x15       
 
-            # Actualiza contador interno
-            addi    x15, x15, 0x1       # R5 = R5 + 1
+            # Actualiza el contador interno sumándole 1 (R5 = R5 + 1)
+            addi    x15, x15, 0x1       
 
-            # Verifica si se dio la cantidad suficiente de sumas (Si R5 > R6, sale)
-            bgt     x15, x16, fin_sum   # Equivalente a MOVGT PC, LR
+            # Verifica condición: si el contador R5 es mayor que R6, sale del ciclo
+            bgt     x15, x16, fin_sum   # Equivalente al MOVGT PC, LR de ARM
 
-            # Continua ciclo for
+            # Si no ha terminado, repite el ciclo for
             j       FUNC_SUMATORIA_FOR
 
 fin_sum:
-            ret
+            ret                         # Retorna al programa principal
 
 
             # COMPARE
-            # -----------------------------------------------
-            # Compara dos registros y retorna el mayor (si son iguales retorna el 1ero)
-            # IN: x12 (R2) Primer operando
-            # IN: x13 (R3) Segundo Operando
-            # OUT: x14 (R4) Resultado de la funcion
+            # IN: x12 (R2) Primer operando, x13 (R3) Segundo operando
+            # OUT: x14 (R4) Resultado de la función (el mayor)
 FUNC_COMP:
-            # En RISC-V evaluamos con bge (Branch if Greater or Equal)
+            # Compara si R2 es mayor o igual a R3 (bge = Branch if Greater or Equal)
             bge     x12, x13, comp_mayor_igual
 
-            # Si no es mayor o igual, entonces R3 es mayor (MOVLT R4, R3)
-            mv      x14, x13
-            ret
+            # Si no es mayor o igual, significa que R3 es mayor (MOVLT R4, R3)
+            mv      x14, x13            # R4 = R3
+            ret                         # Retorna de la función
 
 comp_mayor_igual:
             # Si R2 es mayor o igual (MOVGE R4, R2)
-            mv      x14, x12
-            ret
+            mv      x14, x12            # R4 = R2
+            ret                         # Retorna de la función
