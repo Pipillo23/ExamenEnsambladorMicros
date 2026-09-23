@@ -1,0 +1,167 @@
+# #####################################
+        # SETUP EJERCICIO ORDENAR PALABRAS
+        # #####################################
+        # Definicion de Direcciones de Memoria
+        li      t0, 0x00FF0000
+
+        # Creacion y almacenamiento del primer dato
+        li      t2, 0x00000082
+        sw      t2, 0(t0)
+
+        # Creacion y almacenamiento del segundo dato
+        li      t2, 0x00000099
+        sw      t2, 4(t0)
+
+        # Creacion y almacenamiento del tercer dato
+        li      t2, 0x00000077
+        sw      t2, 8(t0)
+
+        # Creacion y almacenamiento del cuarto dato
+        li      t2, 0x00000005
+        sw      t2, 12(t0)
+
+        # Creacion y almacenamiento del quinto dato
+        li      t2, 0x00000020
+        sw      t2, 16(t0)
+
+        # Creacion y almacenamiento del sexto dato
+        li      t2, 0x00000010
+        sw      t2, 20(t0)
+
+        # Creacion y almacenamiento del séptimo dato
+        li      t2, 0x00000001
+        sw      t2, 24(t0)
+
+        # Creacion y almacenamiento del octavo dato
+        li      t2, 0x00000033
+        sw      t2, 28(t0)
+
+        # Creacion y almacenamiento del noveno dato
+        li      t2, 0x00000050
+        sw      t2, 32(t0)
+
+        # Creacion y almacenamiento del decimo dato
+        li      t2, 0x00000063
+        sw      t2, 36(t0)
+
+        # Reinicio de registros según necesidades del ejercicio
+        li      t2, 0
+
+        # #####################################
+        # ESPACIO PARA SOLUCION
+        # #####################################
+        # Estrategia general: Se extraen los 10 registros y se realizan 10 ciclos para
+        # encontrar el mayor. Al final de cada ciclo se guarda el mayor en memoria y se borra
+        # de los registros para evitar que se elija el mismo valor 10 veces.
+
+        # Address para escritura en orden
+        li      s1, 0xAA000000
+        li      s3, 0
+
+        # Se extraen los 10 valores en 1 registro cada uno (LDR -> lw)
+        lw      t1, 0(t0)
+        lw      t2, 4(t0)
+        lw      t3, 8(t0)
+        lw      t4, 12(t0)
+        lw      t5, 16(t0)
+        lw      t6, 20(t0)
+        lw      a4, 24(t0)
+        lw      a5, 28(t0)
+        lw      a6, 32(t0)
+        lw      a7, 36(t0)
+
+for_acomodo:
+        li      t0, 10
+        beq     s3, t0, FINAL
+        mv      s2, t1
+
+        # Se compara el siguiente registro contra el s2 (R12) usando ramas condicionales
+        # En caso de ser menor o igual, se salta la actualización (reemplaza a MOVGT)
+        ble     t2, s2, skip_2
+        mv      s2, t2
+skip_2:
+
+        ble     t3, s2, skip_3
+        mv      s2, t3
+skip_3:
+
+        ble     t4, s2, skip_4
+        mv      s2, t4
+skip_4:
+
+        ble     t5, s2, skip_5
+        mv      s2, t5
+skip_5:
+
+        ble     t6, s2, skip_6
+        mv      s2, t6
+skip_6:
+
+        ble     a4, s2, skip_7
+        mv      s2, a4
+skip_7:
+
+        ble     a5, s2, skip_8
+        mv      s2, a5
+skip_8:
+
+        ble     a6, s2, skip_9
+        mv      s2, a6
+skip_9:
+
+        ble     a7, s2, skip_10
+        mv      s2, a7
+skip_10:
+
+        # Extraído el registro mayor, se almacena en memoria
+        # Se reemplaza el post-index de ARM (STR R12, [R11], #4) por dos instrucciones en RISC-V
+        sw      s2, 0(s1)
+        addi    s1, s1, 4
+
+        # Una vez almacenado, se asegura que el registro no se vuelva a escoger poniéndolo en 0
+        bne     t1, s2, skip_eq1
+        li      t1, 0
+skip_eq1:
+
+        bne     t2, s2, skip_eq2
+        li      t2, 0
+skip_eq2:
+
+        bne     t3, s2, skip_eq3
+        li      t3, 0
+skip_eq3:
+
+        bne     t4, s2, skip_eq4
+        li      t4, 0
+skip_eq4:
+
+        bne     t5, s2, skip_eq5
+        li      t5, 0
+skip_eq5:
+
+        bne     t6, s2, skip_eq6
+        li      t6, 0
+skip_eq6:
+
+        bne     a4, s2, skip_eq7
+        li      a4, 0
+skip_eq7:
+
+        bne     a5, s2, skip_eq8
+        li      a5, 0
+skip_eq8:
+
+        bne     a6, s2, skip_eq9
+        li      a6, 0
+skip_eq9:
+
+        bne     a7, s2, skip_eq10
+        li      a7, 0
+skip_eq10:
+
+        # Se actualiza el contador de ciclos y se regresa al inicio
+        addi    s3, s3, 1
+        j       for_acomodo
+
+FINAL:
+        # Fin del programa
