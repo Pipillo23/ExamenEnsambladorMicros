@@ -1,0 +1,105 @@
+# Salto a Main para evitar ejecutar los métodos accidentalmente
+        j       main
+
+        # ##################################
+        # METODO CORRIMIENTO
+        # ##################################
+        # a0: Almacena el resultado
+        # a4: Operando base
+        # a5: Operando campos
+corrimiento:
+        # Aplica corrimiento lógico a la izquierda (Shift Left Logical)
+        sll     a0, a4, a5
+
+        # Retorno de función (equivalente a MOV PC, LR en ARM)
+        ret
+
+        # ##################################
+        # METODO OPERACIONES
+        # ##################################
+        # Dependiendo del valor de a3 aplica diversas operaciones.
+        # Usa JAL para saltar a otros métodos.
+        # En RISC-V se utilizan saltos condicionales (BNE) en lugar de sufijos EQ.
+        #   a0: Almacena el resultado
+        #   a1: Registro donde se pasa el operando A
+        #   a2: Registro donde se pasa el operando B
+        #   a3: Registro donde se pasa el operando OP
+        #   a4: Operando base en caso de llamar al método CORRIMIENTO
+        #   a5: Operando campos en caso de llamar al método CORRIMIENTO
+        #   s1: Almacena registro ra en caso de tener que llamar al método CORRIMIENTO
+operaciones:
+        # Inicia el valor de resultado en 0
+        li      a0, 0
+
+        # Ejecucion OP == 0
+        # -----------------------
+        li      t0, 0
+        bne     a3, t0, op_caso_1
+        add     a0, a1, a2
+        ret
+
+op_caso_1:
+        # Ejecucion OP == 1
+        # -----------------------
+        li      t0, 1
+        bne     a3, t0, op_caso_2
+        and     a0, a1, a2
+        ret
+
+op_caso_2:
+        # Ejecucion OP == 2
+        # -----------------------
+        li      t0, 2
+        bne     a3, t0, op_default
+        
+        # Preserva el ra para retornar a main (sustituye a MOV R11, LR)
+        mv      s1, ra
+        # Se almacenan los operandos en a4 y a5
+        mv      a4, a1
+        mv      a5, a2
+        
+        # Salto a método corrimiento (sustituye a BLEQ corrimiento)
+        jal     corrimiento
+        
+        # Retorno usando el ra preservado en s1 (sustituye a MOVEQ PC, R11)
+        jr      s1
+
+op_default:
+        # Caso donde OP es distinto de 0, 1 y 2
+        # -----------------------
+        ret
+
+        # ##################################
+        # MAIN
+        # ##################################
+        #   a0: Registro donde se espera el resultado
+        #   a1: Registro donde se pasa el operando A
+        #   a2: Registro donde se pasa el operando B
+        #   a3: Registro donde se pasa el operando OP
+main:
+        # Se cargan los operandos y se ejecuta el método de Operaciones
+        # Se usa JAL dado que se está traduciendo una función
+
+        # solucion = operaciones(11, 7, 0)
+        li      a1, 11
+        li      a2, 7
+        li      a3, 0
+        jal     operaciones
+
+        # solucion = operaciones(9, 7, 1)
+        li      a1, 9
+        li      a2, 7
+        li      a3, 1
+        jal     operaciones
+
+        # solucion = operaciones(3, 5, 2)
+        li      a1, 3
+        li      a2, 5
+        li      a3, 2
+        jal     operaciones
+
+        # solucion = operaciones(99, 76, 3)
+        li      a1, 99
+        li      a2, 76
+        li      a3, 3
+        jal     operaciones
