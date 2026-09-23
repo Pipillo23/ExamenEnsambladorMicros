@@ -1,0 +1,26 @@
+# Solucion II Ejercicio: Detector de Errores en RISC-V
+        # x10: direccion inicial, x11: direccion final
+        # x12: contador correctas, x13: contador incorrectas
+
+detect_loop:
+        bgt     x10, x11, detect_fin
+        lw      t0, 0(x10)      # Cargar palabra de instruccion
+
+        # Verificacion heuristica de validez de instruccion (ej. opcode o rango valido)
+        srli    t1, t0, 24      # Obtener byte mas significativo
+        li      t2, 0x0F
+        bleu    t1, t2, instruccion_valida
+
+        # Si no cumple, se cataloga como incorrecta
+        addi    x13, x13, 1
+        j       siguiente_dir
+
+instruccion_valida:
+        addi    x12, x12, 1
+
+siguiente_dir:
+        addi    x10, x10, 4
+        j       detect_loop
+
+detect_fin:
+        # Fin de deteccion
