@@ -1,0 +1,1158 @@
+# ================================================================================
+BIBLIOTECA MAESTRA DE ALGORITMOS Y OPERACIONES PARA EXÁMENES DE RISC-V (RV32I)
+Curso: MT-7003 Microprocesadores y Microcontroladores
+
+TABLA DE CONTENIDOS:
+
+ 1. MÓDULO 1: Cifrado Feistel de 4 Rondas con Tabla de Permutación Comprimida
+
+ 2. MÓDULO 2: Detector de Errores de Codificación de Instrucciones ARM32
+
+ 3. MÓDULO 3: Desfragmentación de Memoria Heap In-Place (Marcador 0xDEADDEAD)
+
+ 4. MÓDULO 4: Decodificador de Campos de Bits y Manejo de Operaciones
+
+ 5. MÓDULO 5: Aritmética por Software (Multiplicación, Potencia y División Entera)
+
+ 6. MÓDULO 6: Conteo de Caracteres ASCII Case-Insensitive y Top 2 Frecuencias
+
+ 7. MÓDULO 7: Ordenamiento Descendente de Arreglo en Memoria (Bubble Sort)
+
+ 8. MÓDULO 8: Secuencia Cíclica de Operaciones (Nibbles, XOR Bytes, Halfwords, Mod 17)
+
+ 9. MÓDULO 9: Rotación Manual ROR sin Instrucción Nativa
+
+10. MÓDULO 10: Operaciones Cíclicas sobre Bytes (Suma, Producto Soft, Mezcla Logic-Arit)
+
+11. MÓDULO 11: Traducción Estándar de Lenguaje C a RISC-V (ABI, JAL y JALR)
+
+# ================================================================================
+MÓDULO 1: CIFRADO FEISTEL DE 4 RONDAS (Examen I 2026, Ejercicio I)
+
+\--- DESCRIPCIÓN DEL ALGORITMO ---
+El algoritmo realiza un cifrado Feistel de 4 rondas sobre una palabra de 32 bits.
+
+1. Divide la palabra inicial de 32 bits en dos mitades de 16 bits:
+
+   * L0 = Bits 31 al 16
+
+   * R0 = Bits 15 al 0
+
+2. En cada ronda 'n' (donde n va de 1 a 4):
+
+   * Ln = R\_{n-1}
+
+   * Rn = L\_{n-1} XOR F(R\_{n-1}, Tabla_Permutacion)
+
+3. La función F toma los 16 bits de R\_{n-1} y los reordena consultando una tabla
+   de permutación almacenada en memoria (16 bytes).
+
+   * El byte Z de la tabla indica de qué posición (0 a 15) del R\_{n-1} original se
+     debe extraer el bit que ocupará la posición Z en el resultado procesado.
+
+4. Al finalizar las 4 rondas, junta L4 y R4 para formar la palabra cifrada final de 32 bits.
+
+\--- MAPA DE REGISTROS Y VARIABLES ---
+
+* Entradas:
+  a2: Palabra de 32 bits a cifrar.
+  a0: Dirección base de la tabla de permutación (16 bytes en memoria).
+
+* Salidas:
+  a2: Palabra cifrada final de 32 bits.
+
+* Registros Temporales y Guardados:
+  t0: Almacena Ln (mitad izquierda actual, 16 bits).
+  t1: Almacena Rn (mitad derecha actual, 16 bits).
+  t2: Copia temporal de L\_{n-1} antes de sobreescribir t0.
+  t3: Acumulador del resultado de la función F.
+  t4: Índice del bit destino Z (de 0 a 15).
+  t5: Dirección de memoria efectiva para leer T\[z\].
+  t6: Byte leído de la tabla T\[z\] (indica el bit fuente a extraer).
+  s0: Contador de rondas ejecutadas (0 a 3).
+  s1: Constante límite del bucle de rondas (4).
+  s2: Bit individual extraído y posicionado.
+
+\--- CÓDIGO EN ENSAMBLADOR RISC-V ---
+
+cifrado_feistel:
+\# 1. Separar la palabra en L0 (bits 31-16) y R0 (bits 15-0)
+srli t0, a2, 16            # t0 = L0 (desplaza 16 bits a la derecha)
+andi t1, a2, 0xFFFF        # t1 = R0 (aplica mascara para conservar solo 16 bits LSB)
+
+```
+li   s0, 0                 # Inicializar contador de rondas en 0
+li   s1, 4                 # Límite de rondas = 4
+
+```
+
+feistel_loop:
+beq  s0, s1, feistel_fin   # Si ya se procesaron 4 rondas, salir del bucle
+
+```
+mv   t2, t0                # t2 = L_{n-1} (guardar copia de la mitad izquierda)
+mv   t0, t1                # Ln = R_{n-1} (la nueva mitad izquierda es la derecha anterior)
+
+# 2. Computar Función F(R_{n-1}, Tabla)
+li   t3, 0                 # t3 = Resultado de F acumulado (iniciar en 0)
+li   t4, 0                 # t4 = z = 0 (índice del bit destino)
+
+```
+
+f_perm_loop:
+li   t5, 16
+beq  t4, t5, f_perm_fin    # Cuando z == 16, terminar permutación de la ronda
+
+```
+# Leer el byte T[z] desde memoria
+add  t5, a0, t4            # t5 = Dirección base (a0) + desplazamiento z (t4)
+lbu  t6, 0(t5)             # t6 = T[z] (posición del bit fuente)
+
+# Extraer el bit indicado por t6 desde R_{n-1} (almacenado en t1)
+srl  s2, t1, t6            # Mover el bit deseado a la posición 0
+andi s2, s2, 1             # Aislar el bit dejando solo el LSB
+
+# Insertar el bit extraído en la posición z del resultado
+sll  s2, s2, t4            # Desplazar el bit a la posición z
+or   t3, t3, s2            # Combinar el bit en el acumulador t3
+
+addi t4, t4, 1             # Incrementar posición destino z++
+j    f_perm_loop
+
+```
+
+f_perm_fin:
+\# Rn = L\_{n-1} XOR F(R\_{n-1})
+xor  t1, t2, t3            # t1 (Rn) = t2 (L\_{n-1}) XOR t3 (F_resultado)
+
+```
+addi s0, s0, 1             # Incrementar número de ronda s0++
+j    feistel_loop
+
+```
+
+feistel_fin:
+\# Recombinar L4 y R4 en a2: a2 = (L4 << 16) | R4
+slli t0, t0, 16            # Colocar L4 en los 16 bits superiores
+or   a2, t0, t1            # Unir con R4 en los 16 bits inferiores
+ret
+
+\--- VARIACIONES DE EXAMEN Y CÓMO ADAPTARLO ---
+
+1. Si el examen pide 8 rondas en vez de 4:
+   Cambiar la instrucción `li s1, 4` por `li s1, 8`.
+
+2. Si el orden de concatenación al final es R4 en MSB y L4 en LSB:
+   Cambiar las instrucciones finales por:
+   `slli t1, t1, 16`
+   `or a2, t1, t0`
+
+3. Si la tabla usa palabras de 32 bits en lugar de bytes:
+   Cambiar `lbu t6, 0(t5)` por `lw t6, 0(t5)` y el cálculo de dirección por `slli t5, t4, 2` seguido de `add t5, a0, t5`.
+
+# ================================================================================
+MÓDULO 2: DETECTOR DE ERRORES EN INSTRUCCIONES ARM32 (Examen I 2026, Ejercicio II)
+
+\--- DESCRIPCIÓN DEL ALGORITMO ---
+Analiza un bloque contiguo de memoria que contiene instrucciones codificadas en ARM32
+para identificar si cumplen las reglas sintácticas del repertorio de instrucciones:
+
+1. Extrae los bits 31-28 (código de condición). En ARM32 tradicional, la condición
+   0xF (1111 en binario) representa instrucciones no condicionales especiales o no válidas.
+
+2. Identifica el tipo de instrucción según los bits de Opcode (bits 27-26).
+
+3. Cuenta cuántas instrucciones válidas e inválidas existen en el rango \[a0, a1\].
+
+\--- MAPA DE REGISTROS Y VARIABLES ---
+
+* Entradas:
+  a0: Dirección de inicio del rango de memoria.
+  a1: Dirección de fin del rango de memoria (inclusive).
+
+* Salidas:
+  a2: Cantidad total de instrucciones VÁLIDAS encontradas.
+  a3: Cantidad total de instrucciones INVÁLIDAS encontradas.
+
+* Temporales:
+  t0: Puntero de memoria actual.
+  t1: Palabra binaria de 32 bits leída de memoria.
+  t2: Bits extraídos para análisis.
+  t3: Valor constante de comparación.
+
+\--- CÓDIGO EN ENSAMBLADOR RISC-V ---
+
+detector_errores_arm32:
+li   a2, 0                 # Contador de válidas = 0
+li   a3, 0                 # Contador de inválidas = 0
+mv   t0, a0                # t0 = Puntero de lectura iniciado en a0
+
+detector_loop:
+bgt  t0, a1, detector_fin  # Si el puntero t0 supera la dirección final a1, terminar
+
+```
+lw   t1, 0(t0)             # Leer palabra binaria de 32 bits
+
+# Validación 1: Bits de Condición (Bits 31 a 28)
+srli t2, t1, 28            # Desplazar 28 bits a la derecha para dejar la condición en los LSBs
+andi t2, t2, 0xF           # Conservar solo los 4 bits de condición
+li   t3, 0xF
+beq  t2, t3, op_invalida   # Si la condición es 0xF (1111), la instrucción es inválida
+
+# Validación 2: Verificar Bits 27-26 (Tipo de instrucción)
+srli t2, t1, 26
+andi t2, t2, 0x3           # Extraer los 2 bits de tipo
+# (Aquí se pueden agregar más reglas según la tabla del examen)
+
+```
+
+es_valida:
+addi a2, a2, 1             # Incrementar contador de instrucciones válidas
+j    next_word
+
+op_invalida:
+addi a3, a3, 1             # Incrementar contador de instrucciones inválidas
+
+next_word:
+addi t0, t0, 4             # Avanzar el puntero 4 bytes a la siguiente palabra
+j    detector_loop
+
+detector_fin:
+ret
+
+\--- VARIACIONES DE EXAMEN Y CÓMO ADAPTARLO ---
+
+1. Validar instrucciones de RISC-V en lugar de ARM32:
+   En RISC-V, los 7 bits LSB (bits 6-0) definen el OPCODE. Para validar si es una instrucción I-Type, R-Type, Load, Store o Branch:
+   `andi t2, t1, 0x7F`
+   Luego comparar con las constantes:
+   `0x33` (R-Type: add, sub, and, or)
+   `0x13` (I-Type: addi, andi)
+   `0x03` (Loads: lw, lb)
+   `0x23` (Stores: sw, sb)
+   `0x63` (Branches: beq, bne)
+
+# ================================================================================
+MÓDULO 3: DESFRAGMENTACIÓN DE MEMORIA HEAP IN-PLACE (Examen I 2026, Ejercicio III)
+
+\--- DESCRIPCIÓN DEL ALGORITMO ---
+Inspeciona un segmento de memoria Heap \[a0, a1\] que contiene palabras de datos mezcladas
+con marcas de espacio libre (representadas por el patrón hexadecimal 0xDEADDEAD).
+Realiza una desfragmentación "In-Place" (sin usar arreglos auxiliares):
+
+1. Mueve todas las palabras de datos válidos hacia el inicio de la memoria, preservando
+   su orden relativo original.
+
+2. Rellena las posiciones restantes al final del bloque con el marcador 0xDEADDEAD.
+
+\--- MAPA DE REGISTROS Y VARIABLES ---
+
+* Entradas:
+  a0: Dirección inicial del Heap.
+  a1: Dirección final del Heap (inclusive).
+
+* Temporales:
+  t0: Puntero de LECTURA (recorre todo el bloque buscando datos válidos).
+  t1: Puntero de ESCRITURA (apunta a la posición donde se debe colocar el siguiente dato válido).
+  t2: Registro que sostiene la constante 0xDEADDEAD.
+  t3: Palabra cargada desde el puntero de lectura.
+
+\--- CÓDIGO EN ENSAMBLADOR RISC-V ---
+
+desfragmentar_heap:
+mv   t0, a0                # Puntero lectura = Inicio
+mv   t1, a0                # Puntero escritura = Inicio
+
+```
+# Cargar constante 0xDEADDEAD usando 'li'
+li   t2, 0xDEADDEAD
+
+```
+
+loop_lectura:
+bgt  t0, a1, rellenar_vacios # Cuando lectura supere el fin, pasar a rellenar el final
+
+```
+lw   t3, 0(t0)             # Leer la palabra actual
+beq  t3, t2, es_vacio      # Si es igual a 0xDEADDEAD, omitir escritura
+
+# Si es un dato válido:
+sw   t3, 0(t1)             # Escribir el dato en la posición del puntero de escritura
+addi t1, t1, 4             # Avanzar el puntero de escritura en 4 bytes
+
+```
+
+es_vacio:
+addi t0, t0, 4             # Avanzar siempre el puntero de lectura en 4 bytes
+j    loop_lectura
+
+rellenar_vacios:
+\# Rellenar con 0xDEADDEAD desde el puntero de escritura t1 hasta la dirección final a1
+bgt  t1, a1, desfrag_fin
+sw   t2, 0(t1)             # Escribir la marca de vacío
+addi t1, t1, 4             # Avanzar puntero de escritura
+j    rellenar_vacios
+
+desfrag_fin:
+ret
+
+\--- VARIACIONES DE EXAMEN Y CÓMO ADAPTARLO ---
+
+1. Cambiar la marca de celda vacía:
+   Si la celda vacía se representa con cero (0x00000000) o con 0xFFFFFFFF, simplemente cambiar la instrucción:
+   `li t2, 0`  o  `li t2, -1`
+
+2. Mover los elementos vacíos al INICIO y los válidos al FINAL:
+   Iniciar `t0` y `t1` en `a1` (dirección final), decrementar de 4 en 4 (`addi t0, t0, -4`) y usar la condición de parada `blt`.
+
+# ================================================================================
+MÓDULO 4: DECODIFICADOR DE CAMPOS DE BITS (Examen II 2024 / Verano 2025-2026)
+
+\--- DESCRIPCIÓN DEL ALGORITMO ---
+Recorre un arreglo de palabras empaquetadas en memoria \[t0, t1\]. Cada palabra
+contiene varios campos empaquetados mediante manipulación de bits:
+
+* Op3: Bits 29 al 19 (11 bits de ancho)
+
+* Op2: Bits 18 al 14 (5 bits de ancho)
+
+* Op:  Bits 13 al 10 (4 bits de ancho -> código de operación 0 a 15)
+
+* Op1: Bits 9 al 0   (10 bits de ancho)
+
+Según el valor extraído en 'Op', realiza la operación correspondiente entre los operandos y guarda el resultado secuencialmente a partir de la dirección t2:
+
+* Op 0 o 4: (Op1 XOR Op2) AND Op3
+
+* Op 1 o 5: Op1 - Op2 - Op3
+
+* Op 2 o 6: (Op1 >> Op2) << Op3
+
+* Op 3 o 7: Op3 AND Op2
+
+* Op 8 al 15: Op1 + Op2 + Op3
+
+\--- MAPA DE REGISTROS Y VARIABLES ---
+
+* Entradas:
+  t0: Dirección de inicio de palabras empaquetadas.
+  t1: Dirección de fin de palabras empaquetadas.
+  t2: Dirección donde escribir los resultados.
+
+* Extraídos:
+  t4: Operando 1 (Op1, 10 bits).
+  t5: Código de Operación (Op, 4 bits).
+  t6: Operando 2 (Op2, 5 bits).
+  s1: Operando 3 (Op3, 11 bits).
+  s2: Resultado calculado.
+
+\--- CÓDIGO EN ENSAMBLADOR RISC-V ---
+
+decodificador_operaciones:
+\# Preservar registros s0, s1, s2 en la pila
+addi sp, sp, -12
+sw   s0, 0(sp)
+sw   s1, 4(sp)
+sw   s2, 8(sp)
+
+decod_loop:
+bgt  t0, t1, decod_fin     # Si la dirección actual supera la final, terminar
+
+```
+lw   t3, 0(t0)             # Leer palabra empaquetada
+
+# Extraer Op1 (Bits 9-0 -> Máscara 0x3FF)
+andi t4, t3, 0x3FF
+
+# Extraer Op Code (Bits 13-10 -> Desplazar 10 y máscara 0xF)
+srli t5, t3, 10
+andi t5, t5, 0xF
+
+# Extraer Op2 (Bits 18-14 -> Desplazar 14 y máscara 0x1F)
+srli t6, t3, 14
+andi t6, t6, 0x1F
+
+# Extraer Op3 (Bits 29-19 -> Desplazar 19 y máscara 0x7FF)
+srli s1, t3, 19
+andi s1, s1, 0x7FF
+
+# Estructura de Selección (Switch) basada en Op Code (t5)
+li   s0, 0
+beq  t5, s0, dec_op_0_4
+li   s0, 4
+beq  t5, s0, dec_op_0_4
+
+li   s0, 1
+beq  t5, s0, dec_op_1_5
+li   s0, 5
+beq  t5, s0, dec_op_1_5
+
+li   s0, 2
+beq  t5, s0, dec_op_2_6
+li   s0, 6
+beq  t5, s0, dec_op_2_6
+
+li   s0, 3
+beq  t5, s0, dec_op_3_7
+li   s0, 7
+beq  t5, s0, dec_op_3_7
+
+# Op 8 al 15: Suma de los tres operandos
+add  s2, t4, t6            # s2 = Op1 + Op2
+add  s2, s2, s1            # s2 = s2 + Op3
+j    dec_guardar
+
+```
+
+dec_op_0_4: # (Op1 XOR Op2) AND Op3
+xor  s2, t4, t6
+and  s2, s2, s1
+j    dec_guardar
+
+dec_op_1_5: # Op1 - Op2 - Op3
+sub  s2, t4, t6
+sub  s2, s2, s1
+j    dec_guardar
+
+dec_op_2_6: # (Op1 >> Op2) << Op3
+srl  s2, t4, t6
+sll  s2, s2, s1
+j    dec_guardar
+
+dec_op_3_7: # Op3 AND Op2
+and  s2, s1, t6
+
+dec_guardar:
+sw   s2, 0(t2)             # Almacenar resultado en memoria de salida
+addi t0, t0, 4             # Avanzar puntero de entrada
+addi t2, t2, 4             # Avanzar puntero de salida
+j    decod_loop
+
+decod_fin:
+lw   s0, 0(sp)
+lw   s1, 4(sp)
+lw   s2, 8(sp)
+addi sp, sp, 12
+ret
+
+\--- FÓRMULA DE MÁSCARAS PARA VARIACIONES ---
+Para calcular la máscara de N bits: Mascara = (1 << N) - 1.
+
+* 4 bits:  (1 << 4) - 1  = 15    = 0xF
+
+* 5 bits:  (1 << 5) - 1  = 31    = 0x1F
+
+* 10 bits: (1 << 10) - 1 = 1023  = 0x3FF
+
+* 11 bits: (1 << 11) - 1 = 2047  = 0x7FF
+
+# ================================================================================
+MÓDULO 5: ARITMÉTICA POR SOFTWARE (Examen II 2024 / Verano 2025-2026)
+
+\--- DESCRIPCIÓN DEL ALGORITMO ---
+Proporciona rutinas matemáticas fundamentales para RV32I básico cuando no se
+dispone de la extensión de hardware de multiplicación/división ('M').
+
+1. `multiplicar_soft`: Calcula a0 \* a1 mediante sumas sucesivas.
+
+2. `potencia_soft`: Calcula base^exponente (a0^a1) llamando repetidamente a `multiplicar_soft`.
+
+3. `division_soft`: Calcula el cociente entero (a0 / a1) mediante restas sucesivas.
+
+\--- CÓDIGO EN ENSAMBLADOR RISC-V ---
+
+# ------------------------------------------------------------------------------
+
+# MULTIPLICACIÓN POR SOFTWARE (a0 \* a1)
+
+# Entrada: a0 = Multiplicando, a1 = Multiplicador
+
+# Salida:  a0 = Producto final
+
+# ------------------------------------------------------------------------------
+
+multiplicar_soft:
+li   t0, 0                 # t0 = Acumulador resultado = 0
+li   t1, 0                 # t1 = Contador de iteraciones = 0
+
+mul_soft_loop:
+beq  t1, a1, mul_soft_fin  # Cuando contador == multiplicador, terminar
+add  t0, t0, a0            # Acumular el multiplicando
+addi t1, t1, 1             # Contador++
+j    mul_soft_loop
+
+mul_soft_fin:
+mv   a0, t0                # Retornar el producto en a0
+ret
+
+# ------------------------------------------------------------------------------
+
+# POTENCIA POR SOFTWARE (a0 ^ a1)
+
+# Entrada: a0 = Base, a1 = Exponente
+
+# Salida:  a0 = Resultado de Base^Exponente
+
+# ------------------------------------------------------------------------------
+
+potencia_soft:
+addi sp, sp, -12
+sw   ra, 0(sp)             # Guardar Dirección de Retorno
+sw   s0, 4(sp)             # Guardar Base
+sw   s1, 8(sp)             # Guardar Exponente
+
+```
+mv   s0, a0                # s0 = Base
+mv   s1, a1                # s1 = Exponente
+li   a0, 1                 # Caso base: Base^0 = 1
+
+li   t0, 0                 # Contador i = 0
+
+```
+
+pot_loop:
+beq  t0, s1, pot_fin       # Si i == Exponente, terminar
+mv   a1, s0                # a1 = Base (segundo argumento para multiplicar)
+jal  ra, multiplicar_soft  # a0 = a0 \* Base
+addi t0, t0, 1             # i++
+j    pot_loop
+
+pot_fin:
+lw   ra, 0(sp)
+lw   s0, 4(sp)
+lw   s1, 8(sp)
+addi sp, sp, 12
+ret
+
+# ------------------------------------------------------------------------------
+
+# DIVISIÓN ENTERA POR SOFTWARE (a0 / a1)
+
+# Entrada: a0 = Numerador, a1 = Denominador
+
+# Salida:  a0 = Cociente entero
+
+# ------------------------------------------------------------------------------
+
+division_soft:
+li   t0, 0                 # Cociente = 0
+
+div_soft_loop:
+blt  a0, a1, div_soft_fin  # Si Numerador < Denominador, terminar
+sub  a0, a0, a1            # Restar Denominador al Numerador
+addi t0, t0, 1             # Cociente++
+j    div_soft_loop
+
+div_soft_fin:
+mv   a0, t0                # Retornar el cociente acumulado
+ret
+
+\--- VARIACIONES Y ADAPTACIONES POSIBLES ---
+
+1. Si piden el RESIDUO o MÓDULO de la división (a0 % a1):
+   En la rutina `division_soft`, justo antes de `mv a0, t0`, el registro `a0` contiene
+   exactamente el residuo final de la resta. Para retornar el residuo en lugar del cociente,
+   eliminar la instrucción `mv a0, t0`.
+
+# ================================================================================
+MÓDULO 6: CONTEO DE CARACTERES Y TOP 2 FRECUENCIAS (Examen II 2025, Ejercicio I)
+
+\--- DESCRIPCIÓN DEL ALGORITMO ---
+Analiza una cadena de texto almacenada en un bloque de memoria \[a0, a1\] (4 caracteres por palabra).
+
+1. Es "Case-Insensitive": Convierte automáticamente minúsculas ('a'-'z') a mayúsculas ('A'-'Z').
+
+2. Reserva dinámicamente en la pila un arreglo local de 26 contadores (de 'A' a 'Z') inicializados en 0.
+
+3. Al finalizar la lectura de la cadena, recorre la tabla de contadores para identificar:
+
+   * El carácter más repetido (#1), guardando su código ASCII en s4.
+
+   * El segundo carácter más repetido (#2), guardando su código ASCII en s5.
+
+\--- MAPA DE REGISTROS Y VARIABLES ---
+
+* Entradas:
+  a0: Dirección inicial de la memoria conteniendo la cadena.
+  a1: Dirección final de la memoria (inclusive).
+
+* Salidas:
+  s4: Código ASCII de la letra con Mayor Frecuencia.
+  s5: Código ASCII de la letra con Segunda Mayor Frecuencia.
+
+* Pila:
+  sp\[0..103\]: Arreglo local de 26 enteros de 32 bits (26 \* 4 = 104 bytes).
+
+\--- CÓDIGO EN ENSAMBLADOR RISC-V ---
+
+conteo_caracteres:
+\# Reservar 104 bytes en la pila para la tabla de contadores
+addi sp, sp, -104
+
+```
+# Inicializar a 0 todos los 26 contadores de la pila
+li   t0, 0
+
+```
+
+limpiar_pila_loop:
+li   t1, 26
+beq  t0, t1, contar_cadena_init
+slli t2, t0, 2             # Desplazamiento = t0 \* 4 bytes
+add  t2, sp, t2            # Dirección en la pila
+sw   x0, 0(t2)             # Escribir 0
+addi t0, t0, 1             # t0++
+j    limpiar_pila_loop
+
+contar_cadena_init:
+mv   t0, a0                # t0 = Puntero de lectura actual
+
+contar_cadena_loop:
+bgt  t0, a1, buscar_top2_init # Al procesar toda la memoria, calcular el Top 2
+
+```
+lw   t1, 0(t0)             # Cargar palabra de 32 bits (contiene 4 bytes ASCII)
+li   t2, 0                 # Índice de byte dentro de la palabra (0 a 3)
+
+```
+
+char_loop:
+li   t3, 4
+beq  t2, t3, next_palabra_char # Al terminar los 4 bytes, pasar a la siguiente palabra
+
+```
+andi t4, t1, 0xFF          # Extraer el carácter LSB actual
+srli t1, t1, 8             # Desplazar la palabra para preparar el siguiente byte
+
+# Convertir minúsculas a mayúsculas ('a' = 97, 'z' = 122)
+li   t5, 97
+li   t6, 122
+blt  t4, t5, check_mayuscula
+bgt  t4, t6, check_mayuscula
+addi t4, t4, -32           # 'a' (97) - 32 = 'A' (65)
+
+```
+
+check_mayuscula:
+\# Validar que sea una letra mayúscula válida ('A' = 65, 'Z' = 90)
+li   t5, 65
+li   t6, 90
+blt  t4, t5, next_char_byte
+bgt  t4, t6, next_char_byte
+
+```
+# Incrementar el contador en la pila: sp[(ASCII - 65) * 4]
+sub  s1, t4, t5            # Índice = ASCII - 65 (rango 0 a 25)
+slli s1, s1, 2             # Offset en bytes = Índice * 4
+add  s1, sp, s1            # Dirección efectiva en pila
+lw   s2, 0(s1)             # Cargar contador actual
+addi s2, s2, 1             # Incrementar
+sw   s2, 0(s1)             # Guardar contador actualizado
+
+```
+
+next_char_byte:
+addi t2, t2, 1             # Byte index++
+j    char_loop
+
+next_palabra_char:
+addi t0, t0, 4             # Avanzar puntero de palabra
+j    contar_cadena_loop
+
+buscar_top2_init:
+li   s1, -1                # Frecuencia Máxima #1
+li   s2, -1                # Frecuencia Máxima #2
+li   s4, 65                # ASCII Letra #1 (Por defecto 'A')
+li   s5, 65                # ASCII Letra #2 (Por defecto 'A')
+li   t0, 0                 # Índice de examen (0 a 25)
+
+buscar_top2_loop:
+li   t1, 26
+beq  t0, t1, conteo_fin    # Fin del arreglo de contadores
+
+```
+slli t2, t0, 2
+add  t2, sp, t2
+lw   t3, 0(t2)             # t3 = Frecuencia actual del elemento
+
+ble  t3, s1, eval_max2     # Si frecuencia <= Max1, evaluar si supera a Max2
+
+# Nuevo Máximo #1 encontrado: Desplazar el anterior Max1 hacia Max2
+mv   s2, s1
+mv   s5, s4
+mv   s1, t3
+addi s4, t0, 65            # ASCII = Índice + 65 ('A')
+j    next_eval_top2
+
+```
+
+eval_max2:
+ble  t3, s2, next_eval_top2
+\# Nuevo Máximo #2 encontrado
+mv   s2, t3
+addi s5, t0, 65
+
+next_eval_top2:
+addi t0, t0, 1             # Índice++
+j    buscar_top2_loop
+
+conteo_fin:
+addi sp, sp, 104           # Liberar espacio reservado en la pila
+ret
+
+# ================================================================================
+MÓDULO 7: ORDENAMIENTO DESCENDENTE BUBBLE SORT (Examen II 2025, Ejercicio II)
+
+\--- DESCRIPCIÓN DEL ALGORITMO ---
+
+1. Copia N palabras enteras desde una dirección origen 'a0' hasta una dirección destino 'a1'.
+
+2. Ejecuta el algoritmo de ordenamiento por burbuja (Bubble Sort) para ordenar los
+   elementos de forma DESCENDENTE directamente en la memoria destino 'a1'.
+
+\--- MAPA DE REGISTROS Y VARIABLES ---
+
+* Entradas:
+  a0: Dirección base de origen con los datos desordenados.
+  a1: Dirección base de destino donde se ordenarán los datos.
+  a2: Cantidad de elementos N a ordenar.
+
+* Temporales y Guardados:
+  s1: Elemento A = arreglo\[j\]
+  s2: Elemento B = arreglo\[j+1\]
+
+\--- CÓDIGO EN ENSAMBLADOR RISC-V ---
+
+ordenar_descendente:
+\# 1. Copiar los N elementos de a0 a a1
+li   t0, 0
+copiar_sort_loop:
+beq  t0, a2, bubble_sort_init
+slli t1, t0, 2             # Offset = i \* 4
+add  t2, a0, t1            # Dirección origen
+lw   t3, 0(t2)             # Leer elemento
+add  t2, a1, t1            # Dirección destino
+sw   t3, 0(t2)             # Copiar elemento
+addi t0, t0, 1             # i++
+j    copiar_sort_loop
+
+bubble_sort_init:
+li   t0, 0                 # Bucle externo: i = 0
+addi t1, a2, -1            # Límite externo = N - 1
+
+outer_bubble_loop:
+beq  t0, t1, sort_completado
+
+```
+li   t2, 0                 # Bucle interno: j = 0
+sub  t3, t1, t0            # Límite interno = (N - 1) - i
+
+```
+
+inner_bubble_loop:
+beq  t2, t3, next_outer_bubble
+
+```
+# Calcular direcciones de memoria de a1[j] y a1[j+1]
+slli t4, t2, 2
+add  t4, a1, t4            # t4 = Dirección de a1[j]
+lw   s1, 0(t4)             # s1 = Elemento A
+lw   s2, 4(t4)             # s2 = Elemento B
+
+# CRITERIO DE ORDEN DESCENDENTE:
+# Si A >= B, el orden es correcto.
+# Si A < B, es incorrecto -> Realizar INTERCAMBIO (SWAP).
+bge  s1, s2, sin_intercambio
+
+# Realizar Swap en memoria
+sw   s2, 0(t4)             # a1[j] = B
+sw   s1, 4(t4)             # a1[j+1] = A
+
+```
+
+sin_intercambio:
+addi t2, t2, 1             # j++
+j    inner_bubble_loop
+
+next_outer_bubble:
+addi t0, t0, 1             # i++
+j    outer_bubble_loop
+
+sort_completado:
+ret
+
+\--- ADAPTACIÓN A ORDEN ASCENDENTE ---
+Para cambiar el ordenamiento a ASCENDENTE (de menor a mayor):
+Sustituir `bge s1, s2, sin_intercambio` por `ble s1, s2, sin_intercambio`.
+
+# ================================================================================
+MÓDULO 8: SECUENCIA CÍCLICA DE OPERACIONES (Examen I 2025)
+
+\--- DESCRIPCIÓN DEL ALGORITMO ---
+Recorre las palabras de memoria en \[a0, a1\] aplicando cíclicamente 4 operaciones
+distintas según la posición relativa de la palabra:
+
+* Palabra 1 (Op 1): Suma de sus 8 nibbles (4 bits cada uno).
+
+* Palabra 2 (Op 2): XOR encadenado de sus 4 bytes (B4 XOR B3 XOR B2 XOR B1).
+
+* Palabra 3 (Op 3): Multiplicación de su Halfword alta (bits 31-16) por su Halfword baja (bits 15-0).
+
+* Palabra 4 (Op 4): Residuo del valor entero de la palabra Módulo 17 (palabra % 17).
+
+Los resultados se almacenan correlativamente a partir de la dirección fija 0x00FF0000.
+
+\--- CÓDIGO EN ENSAMBLADOR RISC-V ---
+
+secuencia_operaciones:
+addi sp, sp, -4
+sw   ra, 0(sp)             # Guardar ra debido a llamadas subrutina
+
+```
+li   t2, 0x00FF0000        # Puntero base de salida de datos
+mv   t0, a0                # Puntero de lectura
+li   t1, 1                 # Estado de la secuencia (1, 2, 3, 4)
+
+```
+
+sec_loop:
+bgt  t0, a1, sec_fin
+
+```
+lw   t3, 0(t0)             # Leer palabra actual
+
+li   t4, 1
+beq  t1, t4, ejec_op1
+li   t4, 2
+beq  t1, t4, ejec_op2
+li   t4, 3
+beq  t1, t4, ejec_op3
+
+# Si Estado == 4: Módulo 17 por software
+mv   a0, t3
+li   a1, 17
+jal  ra, modulo_soft
+mv   t5, a0                # Resultado en t5
+li   t1, 1                 # Reiniciar ciclo a Estado 1
+j    sec_guardar
+
+```
+
+ejec_op1: # Suma de los 8 nibbles
+li   t5, 0                 # Suma = 0
+li   t6, 0                 # Contador = 0
+mv   s1, t3
+nibble_loop:
+li   s2, 8
+beq  t6, s2, op1_lista
+andi s3, s1, 0xF           # Extraer el nibble de 4 bits LSB
+add  t5, t5, s3            # Sumar al acumulador
+srli s1, s1, 4             # Desplazar 4 bits a la derecha
+addi t6, t6, 1
+j    nibble_loop
+op1_lista:
+li   t1, 2                 # Transición a Estado 2
+j    sec_guardar
+
+ejec_op2: # XOR encadenado de 4 bytes
+srli s1, t3, 24            # B4 (MSB)
+srli s2, t3, 16
+andi s2, s2, 0xFF          # B3
+srli s3, t3, 8
+andi s3, s3, 0xFF          # B2
+andi s4, t3, 0xFF          # B1 (LSB)
+
+```
+xor  t5, s1, s2
+xor  t5, t5, s3
+xor  t5, t5, s4            # t5 = B4 XOR B3 XOR B2 XOR B1
+li   t1, 3                 # Transición a Estado 3
+j    sec_guardar
+
+```
+
+ejec_op3: # Multiplicación de Halfwords (16 msb \* 16 lsb)
+srli a0, t3, 16            # Halfword alta
+andi a1, t3, 0xFFFF        # Halfword baja
+jal  ra, multiplicar_soft  # Llamar a multiplicación por software
+mv   t5, a0                # Resultado
+li   t1, 4                 # Transición a Estado 4
+
+sec_guardar:
+sw   t5, 0(t2)             # Escribir resultado en la zona 0x00FF0000
+addi t2, t2, 4             # Avanzar puntero de salida
+addi t0, t0, 4             # Avanzar puntero de lectura
+j    sec_loop
+
+sec_fin:
+lw   ra, 0(sp)
+addi sp, sp, 4
+ret
+
+modulo_soft: # a0 % a1 por restas repetidas
+mod_loop:
+blt  a0, a1, mod_fin
+sub  a0, a0, a1
+j    mod_loop
+mod_fin:
+ret
+
+# ================================================================================
+MÓDULO 9: ROTACIÓN MANUAL ROR SIN INSTRUCCIÓN NATIVA (Examen I 2024)
+
+\--- DESCRIPCIÓN DEL ALGORITMO ---
+Aplica una rotación a la derecha de 32 bits (ROR) sobre Operando1 según la cantidad de
+posiciones especificada por Operando2, sin utilizar la instrucción nativa 'ror'.
+Fórmula matemática:
+ROR(X, n) = (X >> (n % 32)) | (X << (32 - (n % 32)))
+
+\--- MAPA DE REGISTROS Y VARIABLES ---
+
+* Entradas:
+  a1: Dirección conteniendo el Operando 1 (Valor a rotar).
+  a2: Dirección conteniendo el Operando 2 (Cantidad de desplazamientos).
+  a3: Dirección de memoria donde almacenar el resultado.
+
+\--- CÓDIGO EN ENSAMBLADOR RISC-V ---
+
+rotacion_manual_ror:
+lw   t0, 0(a1)             # t0 = Operando 1
+lw   t1, 0(a2)             # t1 = Cantidad de posiciones
+
+```
+# Normalizar desplazamiento: n = n % 32 (equivalente a n AND 31)
+andi t1, t1, 31
+beq  t1, x0, ror_cero       # Si la rotación es de 0 bits, no requiere cambios
+
+# Componente 1: Shift Lógico Derecho por 'n' bits
+srl  t2, t0, t1
+
+# Componente 2: Shift Lógico Izquierdo por '(32 - n)' bits
+li   t3, 32
+sub  t3, t3, t1
+sll  t4, t0, t3
+
+# Combinar ambas componentes mediante un OR bit a bit
+or   t5, t2, t4
+j    ror_guardar
+
+```
+
+ror_cero:
+mv   t5, t0
+
+ror_guardar:
+sw   t5, 0(a3)             # Guardar resultado final en memoria
+ret
+
+\--- ADAPTACIÓN PARA ROTACIÓN A LA IZQUIERDA (ROL) ---
+Para calcular ROL(X, n) = (X << (n % 32)) | (X >> (32 - (n % 32))):
+Intercambiar las operaciones `srl` y `sll`.
+
+# ================================================================================
+MÓDULO 10: OPERACIONES CÍCLICAS SOBRE BYTES (Examen I 2024)
+
+\--- DESCRIPCIÓN DEL ALGORITMO ---
+Procesa secuencialmente las palabras en \[a0, a1\] desponponiéndolas en 4 bytes
+(B4, B3, B2, B1) y aplica alternadamente en ciclo 3 operaciones:
+
+* Palabra 1: Suma de bytes -> B4 + B3 + B2 + B1
+
+* Palabra 2: Producto encadenado -> B4 \* B3 \* B2 \* B1 (por software)
+
+* Palabra 3: Mezcla Lógico-Aritmética -> (B4 XOR B3) - (B2 AND B1)
+  Sobrescribe cada resultado en la posición original de la memoria.
+
+\--- CÓDIGO EN ENSAMBLADOR RISC-V ---
+
+operacion_sobre_bytes:
+addi sp, sp, -4
+sw   ra, 0(sp)
+
+```
+mv   t0, a0                # Puntero de memoria
+li   t1, 1                 # Estado de operación (1, 2, 3)
+
+```
+
+op_bytes_loop:
+bgt  t0, a1, op_bytes_fin
+
+```
+lw   t2, 0(t0)             # Leer palabra
+
+# Descomponer la palabra en sus 4 bytes individuales
+srli s1, t2, 24            # B4 (MSB)
+srli s2, t2, 16
+andi s2, s2, 0xFF          # B3
+srli s3, t2, 8
+andi s3, s3, 0xFF          # B2
+andi s4, t2, 0xFF          # B1 (LSB)
+
+li   t3, 1
+beq  t1, t3, byte_op_suma
+li   t3, 2
+beq  t1, t3, byte_op_mult
+
+# Opción 3: Mezcla -> (B4 XOR B3) - (B2 AND B1)
+xor  t4, s1, s2
+and  t5, s3, s4
+sub  t6, t4, t5
+li   t1, 1                 # Volver al Estado 1
+j    byte_op_guardar
+
+```
+
+byte_op_suma:
+add  t6, s1, s2
+add  t6, t6, s3
+add  t6, t6, s4
+li   t1, 2                 # Ir a Estado 2
+j    byte_op_guardar
+
+byte_op_mult:
+\# Producto encadenado B4 \* B3 \* B2 \* B1
+mv   a0, s1
+mv   a1, s2
+jal  ra, multiplicar_soft  # a0 = B4 \* B3
+mv   a1, s3
+jal  ra, multiplicar_soft  # a0 = (B4 \* B3) \* B2
+mv   a1, s4
+jal  ra, multiplicar_soft  # a0 = ((B4 \* B3) \* B2) \* B1
+mv   t6, a0
+li   t1, 3                 # Ir a Estado 3
+
+byte_op_guardar:
+sw   t6, 0(t0)             # Sobrescribir resultado en memoria
+addi t0, t0, 4             # Avanzar puntero de palabra
+j    op_bytes_loop
+
+op_bytes_fin:
+lw   ra, 0(sp)
+addi sp, sp, 4
+ret
+
+# ================================================================================
+MÓDULO 11: TRADUCCIÓN ESTÁNDAR DE C A RISC-V CON ABI (Examen II 2025 Anexo C)
+
+\--- DESCRIPCIÓN DEL ALGORITMO ---
+Demuestra la traducción limpia de un programa C a Ensamblador RISC-V respetando
+la convención estándar ABI:
+
+* Pasaje de parámetros en registros a0, a1, a2.
+
+* Retorno de valor en a0.
+
+* Preservación del registro de retorno 'ra' y de los registros salvados 's0' en la pila.
+
+\--- CÓDIGO C ORIGINAL DEL EXAMEN ---
+/\*
+int corrimiento(int base, int campos) {
+return base << campos;
+}
+
+int operaciones(int a, int b, int op) {
+if (op == 0) return a + b;
+if (op == 1) return a & b;
+if (op == 2) return corrimiento(a, b);
+return 0;
+}
+
+void main() {
+int solucion;
+solucion = operaciones(11, 7, 0);
+solucion = operaciones(9, 7, 1);
+solucion = operaciones(3, 5, 2);
+solucion = operaciones(99, 76, 3);
+}
+\*/
+
+\--- CÓDIGO EN ENSAMBLADOR RISC-V TRADUCIDO ---
+
+# int corrimiento(int base, int campos)
+
+# a0 = base, a1 = campos
+
+corrimiento:
+sll  a0, a0, a1            # a0 = base << campos
+ret                        # Retornar (resultado en a0)
+
+# int operaciones(int a, int b, int op)
+
+# a0 = a, a1 = b, a2 = op
+
+operaciones_c:
+addi sp, sp, -8
+sw   ra, 0(sp)             # Preservar registro de retorno 'ra'
+sw   s0, 4(sp)             # Preservar 's0'
+
+```
+li   t0, 0
+beq  a2, t0, op_c_0       # Si op == 0
+li   t0, 1
+beq  a2, t0, op_c_1       # Si op == 1
+li   t0, 2
+beq  a2, t0, op_c_2       # Si op == 2
+
+li   a0, 0                 # Valor por defecto return 0
+j    op_c_salida
+
+```
+
+op_c_0: # return a + b
+add  a0, a0, a1
+j    op_c_salida
+
+op_c_1: # return a & b
+and  a0, a0, a1
+j    op_c_salida
+
+op_c_2: # return corrimiento(a, b)
+\# Argumentos a0 (a) y a1 (b) ya están configurados
+jal  ra, corrimiento
+
+op_c_salida:
+lw   ra, 0(sp)             # Restaurar 'ra'
+lw   s0, 4(sp)             # Restaurar 's0'
+addi sp, sp, 8             # Liberar marco de pila
+ret
+
+# MAIN
+
+main_c:
+addi sp, sp, -4
+sw   ra, 0(sp)
+
+```
+# 1. solucion = operaciones(11, 7, 0)
+li   a0, 11
+li   a1, 7
+li   a2, 0
+jal  ra, operaciones_c
+
+# 2. solucion = operaciones(9, 7, 1)
+li   a0, 9
+li   a1, 7
+li   a2, 1
+jal  ra, operaciones_c
+
+# 3. solucion = operaciones(3, 5, 2)
+li   a0, 3
+li   a1, 5
+li   a2, 2
+jal  ra, operaciones_c
+
+# 4. solucion = operaciones(99, 76, 3)
+li   a0, 99
+li   a1, 76
+li   a2, 3
+jal  ra, operaciones_c
+
+lw   ra, 0(sp)
+addi sp, sp, 4
+ret
+
+```
+
+# ================================================================================
+FIN DE LA BIBLIOTECA MAESTRA
