@@ -16,7 +16,7 @@
             # ESPACIO PARA SOLUCION
             # #####################
             # En primer lugar se almacenan todos los parametros en memoria
-            sw      x11, 12(x10)
+            sw      x11, 12(x10)   # Todos estos valores guardan las variables en la memoria RAM, los valores se definieron arriba, se guardan consecutivamente en x10+12 y asi sucesivamente
             sw      x12, 16(x10)
             sw      x13, 20(x10)
             sw      x14, 24(x10)
@@ -61,10 +61,10 @@ fin_prog:
             # #####################
             # MULTIPLICACION A x B
             # #####################
-            # IN_PARAM x13 (R3): Operador A
-            # IN_PARAM x14 (R4): Operador B
+            # IN_PARAM x13 (R3): Operador A #Establece los parámetros para poder multiplicarlo
+            # IN_PARAM x14 (R4): Operador B 
             # OUT_PARAM x15 (R5): Resultado
-            # Var x16 (R6): Contador
+            # Var x16 (R6): Contador # El contador de cuantas veces se multiplica el numero
 TAG_MULTIPLICACION:
             li      x15, 0
             li      x16, 0
