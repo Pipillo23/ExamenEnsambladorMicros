@@ -1,0 +1,192 @@
+#       #################
+#       SETUP EJERCICIO
+#       #################
+        li      x5, 0x00AA0000      # x5 = R0 (puntero base origen)
+        li      x6, 0x00AA0000      # x6 = R1 (puntero límite)
+        addi    x6, x6, 36
+
+        # Creación y almacenamiento del primer dato
+        li      x7, 0x12345678
+        sw      x7, 0(x5)
+
+        # Creación y almacenamiento del segundo dato
+        li      x7, 0xABC91176
+        sw      x7, 4(x5)
+
+        # Creación y almacenamiento del tercer dato
+        li      x7, 0x00BB00DD
+        sw      x7, 8(x5)
+
+        # Creación y almacenamiento del cuarto dato
+        li      x7, 0x00000077
+        sw      x7, 12(x5)
+
+        # Creación y almacenamiento del quinto dato
+        li      x7, 0x9ABCDEF0
+        sw      x7, 16(x5)
+
+        # Creación y almacenamiento del sexto dato
+        li      x7, 0x01020304
+        sw      x7, 20(x5)
+
+        # Creación y almacenamiento del séptimo dato
+        li      x7, 0x00FF00FF
+        sw      x7, 24(x5)
+
+        # Creación y almacenamiento del octavo dato
+        li      x7, 0x00000050
+        sw      x7, 28(x5)
+
+        # Reinicio de registros
+        li      x7, 0
+
+        j       MAIN
+
+
+#       #####################
+#         SUMA NIBBLES
+#       #####################
+NIBBLE:
+        li      x18, 0xF0000000
+        and     x10, x9, x18
+        srli    x10, x10, 28
+
+        li      x18, 0x0F000000
+        and     x11, x9, x18
+        srli    x11, x11, 24
+
+        li      x18, 0x00F00000
+        and     x12, x9, x18
+        srli    x12, x12, 20
+
+        li      x18, 0x000F0000
+        and     x13, x9, x18
+        srli    x13, x13, 16
+
+        li      x18, 0x0000F000
+        and     x14, x9, x18
+        srli    x14, x14, 12
+
+        li      x18, 0x00000F00
+        and     x15, x9, x18
+        srli    x15, x15, 8
+
+        li      x18, 0x000000F0
+        and     x16, x9, x18
+        srli    x16, x16, 4
+
+        andi    x17, x9, 0xF
+
+        add     x17, x17, x16
+        add     x17, x17, x15
+        add     x17, x17, x14
+        add     x17, x17, x13
+        add     x17, x17, x12
+        add     x17, x17, x11
+        add     x17, x17, x10
+
+        sw      x17, 0(x7)
+        li      x8, 2
+        j       POST_OPERACION
+
+
+#       #####################
+#           XOR BYTES
+#       #####################
+XOR_OP:
+        li      x18, 0xFF000000
+        and     x10, x9, x18
+        srli    x10, x10, 24
+
+        li      x18, 0x00FF0000
+        and     x11, x9, x18
+        srli    x11, x11, 16
+
+        li      x18, 0x0000FF00
+        and     x12, x9, x18
+        srli    x12, x12, 8
+
+        andi    x13, x9, 0xFF
+
+        xor     x17, x10, x11
+        xor     x17, x17, x12
+        xor     x17, x17, x13
+
+        sw      x17, 0(x7)
+        li      x8, 3
+        j       POST_OPERACION
+
+
+#       #####################
+#         MULT HALFWORD
+#       #####################
+MULT:
+        li      x10, 0
+        li      x17, 0
+
+        li      x18, 0xFF
+        li      x19, 0xFF00
+        add     x18, x18, x19
+
+        and     x12, x9, x18        # Parte baja
+        slli    x18, x18, 16
+        and     x11, x9, x18        # Parte alta
+        srli    x11, x11, 16
+
+INIC_MULT:
+        bge     x10, x12, FIN_MULT
+        add     x17, x17, x11
+        addi    x10, x10, 1
+        j       INIC_MULT
+
+FIN_MULT:
+        sw      x17, 0(x7)
+        li      x8, 4
+        j       POST_OPERACION
+
+
+#       #####################
+#               MODULO
+#       #####################
+MOD:
+        mv      x17, x9
+
+INIC_MOD:
+        li      x18, 17
+        blt     x17, x18, FIN_MOD
+        sub     x17, x17, x18
+        j       INIC_MOD
+
+FIN_MOD:
+        sw      x17, 0(x7)
+        li      x8, 1
+        j       POST_OPERACION
+
+
+#       #####################
+#               MAIN
+#       #####################
+MAIN:
+        li      x7, 0x00FF0000      # Puntero base destino
+        li      x8, 1               # Selector de operación
+
+FORLOOP:
+        bge     x5, x6, FIN
+        lw      x9, 0(x5)           # Lee palabra de memoria
+
+        li      x18, 1
+        beq     x8, x18, NIBBLE
+        li      x18, 2
+        beq     x8, x18, XOR_OP
+        li      x18, 3
+        beq     x8, x18, MULT
+        li      x18, 4
+        beq     x8, x18, MOD
+
+POST_OPERACION:
+        addi    x5, x5, 4
+        addi    x7, x7, 4
+        j       FORLOOP
+
+FIN:
+        # Fin de ejecución
