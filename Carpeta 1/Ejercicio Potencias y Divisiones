@@ -96,8 +96,8 @@ TAG_FOR_POT:
             beq     x28, x30, fin_pot   # Si Exponente == Contador, retornar
 
             # Carga operandos para multiplicar
-            mv      x13, x29
-            mv      x14, x17
+            mv      x13, x29 #Coloca el valor que tenemos acumulado en x29 y lo mueve hacia 13
+            mv      x14, x17 # Mueve la base fija de 17 y la mete en 14
 
             jal     ra, TAG_MULTIPLICACION
 
