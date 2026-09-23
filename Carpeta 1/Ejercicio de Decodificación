@@ -1,0 +1,141 @@
+# ######################################
+            # Decodificador
+            # ######################################
+            # Definicion de Direcciones de Memoria
+            # Inicio de espacio con datos
+            li      x10, 0x00FF0000
+
+            # Fin de espacio con datos (R1 = R0 + 16)
+            addi    x11, x10, 16
+
+            # Inicio espacio de memoria para soluciones
+            li      x12, 0x00AA0000
+
+            # 1er Valor en Memoria
+            li      x13, 0xFE000000
+            addi    x13, x13, 0x700         # Ajuste equivalente a 0x00AB0000 mediante suma de bloques validos en li/addi
+            lui     x13, 0xFE0AB            # (Alternativa limpia para cargar valores grandes) -> Usamos bloques seguros:
+            
+            # Nota: Para evitar errores con constantes grandes en li/addi, 
+            # cargamos los valores exactos usando la lógica limpia de RISC-V:
+            li      x13, 0xFEAB5713
+            sw      x13, 0(x10)
+
+            # 2do Valor en Memoria
+            li      x13, 0xAC980F10
+            sw      x13, 4(x10)
+
+            # 3er Valor en Memoria
+            li      x13, 0x05F82E33
+            sw      x13, 8(x10)
+
+            # 4to Valor en Memoria
+            li      x13, 0x00499A0F
+            sw      x13, 12(x10)
+
+            # 5to Valor en Memoria
+            li      x13, 0xFEC70098
+            sw      x13, 16(x10)
+
+            # Limpiar R3 (x13)
+            li      x13, 0
+
+
+            # #####################
+            # ESPACIO PARA SOLUCION
+            # #####################
+TAG_INICIO_FOR:       
+            bgt     x10, x11, FIN       # Si R0 > R1 (actual > fin), termina (Equivalente a BLT R1, R0)
+
+            # Extraer la palabra de memoria
+            lw      x14, 0(x10)
+
+            # Operación: Corrimiento de 10 bits y máscara de 4 bits (0xF)
+            srli    x15, x14, 10
+            andi    x15, x15, 0xF
+
+            # Operando 1: Crear máscara de 10 bits (0x3FF) y aplicar AND
+            li      x29, 0x300
+            addi    x29, x29, 0xFF      # 0x300 + 0xFF = 0x3FF
+            andi    x16, x14, 255       # Aplicación limpia de máscara sobre los bits bajos
+
+            # Operando 2: Corrimiento de 14 bits y máscara de 5 bits (0x1F)
+            srli    x17, x14, 14
+            andi    x17, x17, 0x1F
+
+            # Operando 3: Máscara de 11 bits (0x7FF), corrimiento de 19 bits y AND
+            li      x29, 0x700
+            addi    x29, x29, 0xFF      # 0x700 + 0xFF = 0x7FF
+            srli    x28, x14, 19
+            and     x28, x28, x29
+
+            # Salto a operacion segun el codigo (x15)
+            li      x29, 0
+            beq     x15, x29, TAG_OPERACION_0_Y_4
+            li      x29, 4
+            beq     x15, x29, TAG_OPERACION_0_Y_4
+
+            li      x29, 1
+            beq     x15, x29, TAG_OPERACION_1_Y_5
+            li      x29, 5
+            beq     x15, x29, TAG_OPERACION_1_Y_5
+
+            li      x29, 2
+            beq     x15, x29, TAG_OPERACION_2_Y_6
+            li      x29, 6
+            beq     x15, x29, TAG_OPERACION_2_Y_6
+
+            li      x29, 3
+            beq     x15, x29, TAG_OPERACION_3_Y_7
+            li      x29, 7
+            beq     x15, x29, TAG_OPERACION_3_Y_7
+
+            # Caso Operación = 8 a 15 (Por defecto si no fue 0-7)
+            j       TAG_OPERACION_8_A_15
+
+
+            # Ejecutar Operación
+            # ------------------------------------------------
+# (Operando1 XOR Operando2) AND Operando3
+TAG_OPERACION_0_Y_4:       
+            xor     x30, x16, x17
+            and     x30, x30, x28
+            j       TAG_ALMACENAR
+
+# Operando1 – Operando2 – Operando3
+TAG_OPERACION_1_Y_5:       
+            sub     x30, x16, x17
+            sub     x30, x30, x28
+            j       TAG_ALMACENAR
+
+# (Operando1 >> Operando2) << Operando3
+TAG_OPERACION_2_Y_6:       
+            srl     x30, x16, x17
+            sll     x30, x30, x28
+            j       TAG_ALMACENAR
+
+# Operando3 & Operando2
+TAG_OPERACION_3_Y_7:       
+            and     x30, x28, x17
+            j       TAG_ALMACENAR
+
+# Operando1 + Operando2 + Operando3
+TAG_OPERACION_8_A_15:       
+            add     x30, x16, x17
+            add     x30, x30, x28
+            j       TAG_ALMACENAR
+
+
+            # Almacenar resultado y aumentar direcciones de memoria
+            # ------------------------------------------------
+TAG_ALMACENAR:       
+            sw      x30, 0(x12)
+            addi    x10, x10, 4
+            addi    x12, x12, 4
+            j       TAG_INICIO_FOR
+
+
+            # Fin del Programa
+            # ------------------------------------------------
+FIN:
+            j       FIN
