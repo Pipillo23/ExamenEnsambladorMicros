@@ -1,0 +1,135 @@
+# ######################################
+            # SETUP EJERCICIO POTENCIAS Y DIVISIONES
+            # ######################################
+            # Definicion de Direcciones de Memoria
+            li      x10, 0x00FF0000
+
+            # Valor de Registros como operandos de las operaciones
+            li      x11, 2
+            li      x12, 3
+            li      x13, 80
+            li      x14, 10
+            li      x15, 99
+            li      x16, 2
+
+            # #####################
+            # ESPACIO PARA SOLUCION
+            # #####################
+            # En primer lugar se almacenan todos los parametros en memoria
+            sw      x11, 12(x10)
+            sw      x12, 16(x10)
+            sw      x13, 20(x10)
+            sw      x14, 24(x10)
+            sw      x15, 28(x10)
+            sw      x16, 32(x10)
+
+
+            # Operacion R1^R2 (x11 ^ x12)
+            # ----------------------------------------------------------
+            lw      x17, 12(x10)        # R7 <- Mem[R0 + 12]
+            lw      x28, 16(x10)        # R8 <- Mem[R0 + 16]
+
+            jal     ra, TAG_POTENCIA
+
+            sw      x29, 0(x10)         # Mem[R0] <- R9 (Resultado)
+
+
+            # Operacion R3/R4
+            # ----------------------------------------------------------
+            lw      x13, 20(x10)        # R3 <- Mem[R0 + 20]
+            lw      x14, 24(x10)        # R4 <- Mem[R0 + 24]
+
+            jal     ra, TAG_DIVISION
+
+            sw      x15, 4(x10)         # Mem[R0 + 4] <- R5 (Resultado)
+
+
+            # Operacion R5*R6
+            # ----------------------------------------------------------
+            lw      x13, 28(x10)        # R3 <- Mem[R0 + 28]
+            lw      x14, 32(x10)        # R4 <- Mem[R0 + 32]
+
+            jal     ra, TAG_MULTIPLICACION
+
+            sw      x15, 8(x10)         # Mem[R0 + 8] <- R5 (Resultado)
+
+            # Fin del programa (bucle infinito para detener la ejecución en Ripes)
+fin_prog:
+            j       fin_prog
+
+
+            # #####################
+            # MULTIPLICACION A x B
+            # #####################
+            # IN_PARAM x13 (R3): Operador A
+            # IN_PARAM x14 (R4): Operador B
+            # OUT_PARAM x15 (R5): Resultado
+            # Var x16 (R6): Contador
+TAG_MULTIPLICACION:
+            li      x15, 0
+            li      x16, 0
+
+TAG_FOR_MUL:       
+            beq     x14, x16, fin_mul   # Si B == Contador, salir (Equivalente a MOVEQ PC, LR)
+            add     x15, x15, x13       # R5 = R5 + R3
+            addi    x16, x16, 1         # R6 = R6 + 1
+            j       TAG_FOR_MUL
+
+fin_mul:
+            ret
+
+
+            # #####################
+            # POTENCIA
+            # #####################
+            # IN_PARAM x17 (R7): Base
+            # IN_PARAM x28 (R8): Exponente
+            # OUT_PARAM x29 (R9): Resultado
+            # Var x30 (R10): Contador
+            # Var x31 (R11): Resguardo de LR (ra)
+TAG_POTENCIA:       
+            li      x29, 1
+            li      x30, 0
+            mv      x31, ra             # Preserva el registro de retorno
+
+TAG_FOR_POT:       
+            beq     x28, x30, fin_pot   # Si Exponente == Contador, retornar
+
+            # Carga operandos para multiplicar
+            mv      x13, x29
+            mv      x14, x17
+
+            jal     ra, TAG_MULTIPLICACION
+
+            mv      x29, x15            # Actualiza resultado con R5
+            addi    x30, x30, 1         # Incrementa contador
+            j       TAG_FOR_POT
+
+fin_pot:
+            jr      x31                 # Retorna usando el ra guardado
+
+
+            # #####################
+            # DIVISION
+            # #####################
+            # IN_PARAM x13 (R3): Numerador A
+            # IN_PARAM x14 (R4): Denominador B
+            # OUT_PARAM x15 (R5): Cociente
+            # VAR x16 (R6): Copia modificable del numerador
+TAG_DIVISION:       
+            li      x15, 0
+            mv      x16, x13
+
+TAG_FOR_DIV:       
+            beq     x16, x0, fin_div    # Si el numerador es 0, termina
+            sub     x16, x16, x14       # Resta el denominador
+            bltz    x16, fin_div_neg    # Si da negativo (MOVMI), la resta no cuenta
+
+            addi    x15, x15, 1         # Incrementa cociente
+            j       TAG_FOR_DIV
+
+fin_div_neg:
+            ret
+
+fin_div:
+            ret
