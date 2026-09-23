@@ -1,0 +1,39 @@
+# Solucion III Ejercicio: Desfragmentacion de Memoria en RISC-V
+        # x0: inicio del bloque (R0), x1 (x11): fin del bloque
+        
+        mv      t0, x10         # Puntero de lectura/escritor de validos (Head)
+        mv      t1, x10         # Puntero de recorrido (Current)
+        
+        # Constante 0xDEADDEAD
+        li      t5, 0xDE000000
+        li      t2, 0x00AD0000
+        add     t5, t5, t2
+        li      t2, 0x0000DE00
+        add     t5, t5, t2
+        li      t2, 0x000000AD
+        add     t5, t5, t2
+
+defrag_loop:
+        bgt     t1, x11, defrag_rellenar
+        lw      t3, 0(t1)
+        
+        # Verificar si es espacio vacio (0xDEADDEAD)
+        beq     t3, t5, es_vacio
+        
+        # Si es valido, mover al frente (in-place)
+        sw      t3, 0(t0)
+        addi    t0, t0, 4
+
+es_vacio:
+        addi    t1, t1, 4
+        j       defrag_loop
+
+defrag_rellenar:
+        # Rellenar el resto del bloque con espacios vacios 0xDEADDEAD
+        bgt     t0, x11, defrag_fin
+        sw      t5, 0(t0)
+        addi    t0, t0, 4
+        j       defrag_rellenar
+
+defrag_fin:
+        # Desfragmentacion completada in-place
