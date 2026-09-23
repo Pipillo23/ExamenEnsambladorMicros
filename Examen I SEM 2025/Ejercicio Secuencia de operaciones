@@ -1,52 +1,53 @@
-#       #################
-#       SETUP EJERCICIO
-#       #################
-        li      x5, 0x00AA0000      # x5 = R0 (puntero base origen)
-        li      x6, 0x00AA0000      # x6 = R1 (puntero límite)
-        addi    x6, x6, 36
+#       #################################################
+#       SETUP: Inicialización de direcciones y datos
+#       #################################################
+        li      x5, 0x00AA0000      # x5 = R0 (Puntero base de origen de los datos)
+        li      x6, 0x00AA0000      # x6 = R1 (Puntero límite para saber cuándo terminar)
+        addi    x6, x6, 36          # Ajusta el límite sumando el espacio de las palabras
 
-        # Creación y almacenamiento del primer dato
+        # Creación y almacenamiento del primer dato en memoria (0x00AA0000)
         li      x7, 0x12345678
         sw      x7, 0(x5)
 
-        # Creación y almacenamiento del segundo dato
+        # Creación y almacenamiento del segundo dato (+4 bytes)
         li      x7, 0xABC91176
         sw      x7, 4(x5)
 
-        # Creación y almacenamiento del tercer dato
+        # Creación y almacenamiento del tercer dato (+8 bytes)
         li      x7, 0x00BB00DD
         sw      x7, 8(x5)
 
-        # Creación y almacenamiento del cuarto dato
+        # Creación y almacenamiento del cuarto dato (+12 bytes)
         li      x7, 0x00000077
         sw      x7, 12(x5)
 
-        # Creación y almacenamiento del quinto dato
+        # Creación y almacenamiento del quinto dato (+16 bytes)
         li      x7, 0x9ABCDEF0
         sw      x7, 16(x5)
 
-        # Creación y almacenamiento del sexto dato
+        # Creación y almacenamiento del sexto dato (+20 bytes)
         li      x7, 0x01020304
         sw      x7, 20(x5)
 
-        # Creación y almacenamiento del séptimo dato
+        # Creación y almacenamiento del séptimo dato (+24 bytes)
         li      x7, 0x00FF00FF
         sw      x7, 24(x5)
 
-        # Creación y almacenamiento del octavo dato
+        # Creación y almacenamiento del octavo dato (+28 bytes)
         li      x7, 0x00000050
         sw      x7, 28(x5)
 
-        # Reinicio de registros
+        # Reinicio del registro temporal de datos
         li      x7, 0
 
-        j       MAIN
+        j       MAIN                # Salta al bucle principal del programa
 
 
-#       #####################
-#         SUMA NIBBLES
-#       #####################
+#       #################################################
+#       SUMA NIBBLES: Extrae y suma bloques de 4 bits
+#       #################################################
 NIBBLE:
+        # Paso 1 a 8: Aislar cada nibble de 4 bits mediante máscara AND y corrimiento lógico (srli)
         li      x18, 0xF0000000
         and     x10, x9, x18
         srli    x10, x10, 28
@@ -75,8 +76,9 @@ NIBBLE:
         and     x16, x9, x18
         srli    x16, x16, 4
 
-        andi    x17, x9, 0xF
+        andi    x17, x9, 0xF        # Último nibble sin corrimiento
 
+        # Paso 9: Acumular la suma de todos los nibbles en el registro x17
         add     x17, x17, x16
         add     x17, x17, x15
         add     x17, x17, x14
@@ -85,15 +87,16 @@ NIBBLE:
         add     x17, x17, x11
         add     x17, x17, x10
 
-        sw      x17, 0(x7)
-        li      x8, 2
-        j       POST_OPERACION
+        sw      x17, 0(x7)          # Guarda el resultado final en la memoria de destino
+        li      x8, 2               # Prepara el siguiente selector de operación (XOR)
+        j       POST_OPERACION      # Salta al post-proceso para avanzar punteros
 
 
-#       #####################
-#           XOR BYTES
-#       #####################
+#       #################################################
+#       XOR BYTES: Aplica XOR secuencial entre 4 bytes
+#       #################################################
 XOR_OP:
+        # Aislar los 4 bytes individuales de la palabra
         li      x18, 0xFF000000
         and     x10, x9, x18
         srli    x10, x10, 24
@@ -108,85 +111,88 @@ XOR_OP:
 
         andi    x13, x9, 0xFF
 
+        # Aplicar operación lógica XOR en cadena (Byte1 XOR Byte2 XOR Byte3 XOR Byte4)
         xor     x17, x10, x11
         xor     x17, x17, x12
         xor     x17, x17, x13
 
-        sw      x17, 0(x7)
-        li      x8, 3
+        sw      x17, 0(x7)          # Guarda el resultado en memoria
+        li      x8, 3               # Cambia el selector a la siguiente operación (MULT)
         j       POST_OPERACION
 
 
-#       #####################
-#         MULT HALFWORD
-#       #####################
+#       #################################################
+#       MULT HALFWORD: Multiplica mitades por sumas sucesivas
+#       #################################################
 MULT:
-        li      x10, 0
-        li      x17, 0
+        li      x10, 0              # x10 actúa como contador en 0
+        li      x17, 0              # Acumulador del resultado en 0
 
+        # Crear máscara FFFF para aislar las mitades (Halfwords)
         li      x18, 0xFF
         li      x19, 0xFF00
         add     x18, x18, x19
 
-        and     x12, x9, x18        # Parte baja
-        slli    x18, x18, 16
-        and     x11, x9, x18        # Parte alta
+        and     x12, x9, x18        # Obtiene la parte baja (el multiplicador)
+        slli    x18, x18, 16        # Desplaza la máscara a la parte alta
+        and     x11, x9, x18        # Obtiene la parte alta (el valor a sumar)
         srli    x11, x11, 16
 
 INIC_MULT:
-        bge     x10, x12, FIN_MULT
-        add     x17, x17, x11
-        addi    x10, x10, 1
+        bge     x10, x12, FIN_MULT  # Si el contador alcanza la parte baja, termina
+        add     x17, x17, x11       # Suma sucesiva: acumulador += parte alta
+        addi    x10, x10, 1         # Incrementa el contador en 1
         j       INIC_MULT
 
 FIN_MULT:
-        sw      x17, 0(x7)
-        li      x8, 4
+        sw      x17, 0(x7)          # Guarda el resultado final de la multiplicación
+        li      x8, 4               # Cambia el selector a la operación MOD
         j       POST_OPERACION
 
 
-#       #####################
-#               MODULO
-#       #####################
+#       #################################################
+#       MODULO: Calcula el residuo de dividir entre 17
+#       #################################################
 MOD:
-        mv      x17, x9
+        mv      x17, x9             # Copia la palabra original al registro de trabajo
 
 INIC_MOD:
         li      x18, 17
-        blt     x17, x18, FIN_MOD
-        sub     x17, x17, x18
+        blt     x17, x18, FIN_MOD   # Si el número es menor a 17, termina el bucle
+        sub     x17, x17, x18       # Resta 17 iterativamente
         j       INIC_MOD
 
 FIN_MOD:
-        sw      x17, 0(x7)
-        li      x8, 1
+        sw      x17, 0(x7)          # Guarda el residuo final en memoria
+        li      x8, 1               # Reinicia el selector a la primera operación (NIBBLE)
         j       POST_OPERACION
 
 
-#       #####################
-#               MAIN
-#       #####################
+#       #################################################
+#       MAIN: Bucle principal que controla el flujo
+#       #################################################
 MAIN:
-        li      x7, 0x00FF0000      # Puntero base destino
-        li      x8, 1               # Selector de operación
+        li      x7, 0x00FF0000      # x7 = Dirección base de destino para guardar resultados
+        li      x8, 1               # x8 = Selector inicial de operación (empieza en 1)
 
 FORLOOP:
-        bge     x5, x6, FIN
-        lw      x9, 0(x5)           # Lee palabra de memoria
+        bge     x5, x6, FIN         # Condición de salida: si origen >= límite, termina
+        lw      x9, 0(x5)           # Lee la siguiente palabra de la memoria RAM
 
+        # Selector de operaciones mediante saltos condicionales (beq)
         li      x18, 1
-        beq     x8, x18, NIBBLE
+        beq     x8, x18, NIBBLE     # Si selector == 1, salta a NIBBLE
         li      x18, 2
-        beq     x8, x18, XOR_OP
+        beq     x8, x18, XOR_OP     # Si selector == 2, salta a XOR_OP
         li      x18, 3
-        beq     x8, x18, MULT
+        beq     x8, x18, MULT       # Si selector == 3, salta a MULT
         li      x18, 4
-        beq     x8, x18, MOD
+        beq     x8, x18, MOD        # Si selector == 4, salta a MOD
 
 POST_OPERACION:
-        addi    x5, x5, 4
-        addi    x7, x7, 4
-        j       FORLOOP
+        addi    x5, x5, 4           # Avanza el puntero de lectura 4 bytes (siguiente palabra)
+        addi    x7, x7, 4           # Avanza el puntero de escritura 4 bytes en destino
+        j       FORLOOP             # Regresa al inicio del bucle
 
 FIN:
-        # Fin de ejecución
+        # Fin de la ejecución del programa
